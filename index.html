@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kiosque</title>
+<meta name="theme-color" content="#1d1b18">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#f6f3ee; --surface:#fffdf9; --surface2:#efeae2; --ink:#1d1b18; --ink2:#5d574e; --ink3:#8d867b;
+  --line:#e2dcd2; --accent:#b8321f; --accent-ink:#fff; --chip:#e9e3d8; --shadow:0 1px 2px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#141311; --surface:#1d1c19; --surface2:#26241f; --ink:#f0ece4; --ink2:#b9b2a6; --ink3:#857e72;
+  --line:#2f2c27; --accent:#e2563f; --chip:#2b2924; --shadow:none;
+}}
+:root[data-theme="dark"]{
+  --bg:#141311; --surface:#1d1c19; --surface2:#26241f; --ink:#f0ece4; --ink2:#b9b2a6; --ink3:#857e72;
+  --line:#2f2c27; --accent:#e2563f; --chip:#2b2924; --shadow:none;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+a{color:inherit}
+.serif{font-family:Georgia,"Times New Roman",serif}
+
+/* Header */
+header{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(env(safe-area-inset-top) + 10px) 16px 0;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:10px}
+.brand{font-family:Georgia,serif;font-size:24px;font-weight:700;letter-spacing:-.5px;flex:1}
+.brand b{color:var(--accent)}
+.iconbtn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:18px}
+.iconbtn:active{background:var(--chip)}
+.flags{display:flex;gap:6px}
+.flag{padding:4px 9px;border-radius:999px;background:var(--chip);font-size:13px;display:flex;gap:4px;align-items:center;opacity:.45;border:1px solid transparent}
+.flag.on{opacity:1;border-color:var(--ink3)}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:8px -16px 0;padding:0 12px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{white-space:nowrap;padding:10px 10px 11px;color:var(--ink2);font-weight:500;border-bottom:3px solid transparent}
+.tab.on{color:var(--ink);border-color:var(--accent)}
+
+/* Feed */
+main{max-width:760px;margin:0 auto;padding:12px 16px 90px;min-height:70vh}
+.status{color:var(--ink3);font-size:13px;text-align:center;padding:10px 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.meta{display:flex;align-items:center;gap:6px;color:var(--ink3);font-size:12.5px;margin-bottom:6px}
+.meta .src{color:var(--ink2);font-weight:600;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.title{font-family:Georgia,serif;font-size:17.5px;line-height:1.3;font-weight:600;text-decoration:none;display:block}
+.row{display:flex;gap:10px}
+.row .thumb{width:84px;height:84px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--surface2)}
+.desc{color:var(--ink2);font-size:14px;margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.actions{display:flex;gap:4px;margin-top:10px;flex-wrap:wrap}
+.act{font-size:13px;padding:6px 10px;border-radius:999px;background:var(--chip);color:var(--ink2)}
+.act.hot{background:var(--accent);color:var(--accent-ink)}
+.related{margin:10px 0 0;padding:10px 0 0;border-top:1px dashed var(--line);list-style:none}
+.related li{padding:5px 0;font-size:14px}
+.related a{text-decoration:none}
+.related small{color:var(--ink3)}
+.lead .title{font-size:21px}
+.sectiontitle{font-family:Georgia,serif;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:18px 2px 8px}
+
+/* Sheets */
+.sheet{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column}
+.sheet.open{display:flex}
+.sheethead{display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;border-bottom:1px solid var(--line)}
+.sheethead h2{font-family:Georgia,serif;font-size:19px;margin:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheetbody{flex:1;overflow-y:auto;padding:14px 16px 40px;max-width:760px;width:100%;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.pick{padding:11px 12px;border-radius:12px;background:var(--surface);border:1.5px solid var(--line);text-align:left;display:flex;gap:8px;align-items:center}
+.pick.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.hint{color:var(--ink3);font-size:13px;margin:4px 0 10px}
+h3{font-family:Georgia,serif;font-size:16px;margin:22px 0 6px}
+.btn{padding:12px 16px;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:600;width:100%;margin-top:18px}
+.btn.ghost{background:var(--chip);color:var(--ink)}
+.jrow{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.jrow .n{flex:1;min-width:0}
+.jrow .n small{display:block;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.form2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.form2 .full{grid-column:1/-1}
+
+/* Compare */
+.cols{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;flex:1;padding:12px 16px 30px;align-items:flex-start}
+.col{flex:0 0 min(88vw,360px);scroll-snap-align:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;max-height:100%;overflow-y:auto}
+.col h4{margin:0 0 8px;font-size:16px;display:flex;gap:6px;align-items:center}
+.col .q{display:flex;gap:6px;margin-bottom:8px}
+.col .q input{padding:8px 10px;font-size:14px}
+.col .item{padding:9px 0;border-bottom:1px solid var(--line)}
+.col .item:last-child{border:0}
+.col .item a{text-decoration:none;font-family:Georgia,serif;font-weight:600;line-height:1.3;display:block}
+.col .item small{color:var(--ink3)}
+.dots{display:flex;justify-content:center;gap:6px;padding:8px}
+.dots button{padding:5px 10px;border-radius:999px;background:var(--chip);font-size:13px}
+.searchbar{display:flex;gap:8px;margin-bottom:10px}
+.searchbar button{padding:0 16px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;z-index:99;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.ptr{height:0;overflow:hidden;text-align:center;color:var(--ink3);font-size:13px;transition:height .15s}
+@media (min-width:900px){ .cols{justify-content:center} .dots{display:none} }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">Kiosque<b>.</b></div>
+    <div class="flags" id="flags"></div>
+    <button class="iconbtn" id="refreshBtn" title="Actualiser">⟳</button>
+    <button class="iconbtn" id="settingsBtn" title="Réglages">⚙</button>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+<div class="ptr" id="ptr">Relâcher pour actualiser</div>
+<main id="feed"></main>
+
+<!-- Réglages / premier lancement -->
+<section class="sheet" id="settings">
+  <div class="sheethead"><h2 id="settingsTitle">Réglages</h2><button class="iconbtn" id="settingsClose">✕</button></div>
+  <div class="sheetbody" id="settingsBody"></div>
+</section>
+
+<!-- Comparaison -->
+<section class="sheet" id="compare">
+  <div class="sheethead"><button class="iconbtn" id="compareClose">←</button><h2 id="compareTitle">Comparer</h2><button class="iconbtn" id="followBtn" title="Suivre ce sujet">☆</button></div>
+  <div class="dots" id="compareDots"></div>
+  <div class="cols" id="compareCols"></div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ====== Données de référence ====== */
+const COUNTRIES = {
+  FR:{name:'France',flag:'🇫🇷',hl:'fr',gl:'FR',ceid:'FR:fr',lang:'fr'},
+  BE:{name:'Belgique',flag:'🇧🇪',hl:'fr',gl:'BE',ceid:'BE:fr',lang:'fr'},
+  CH:{name:'Suisse',flag:'🇨🇭',hl:'fr',gl:'CH',ceid:'CH:fr',lang:'fr'},
+  CA:{name:'Québec',flag:'🇨🇦',hl:'fr-CA',gl:'CA',ceid:'CA:fr',lang:'fr'},
+  MA:{name:'Maroc',flag:'🇲🇦',hl:'fr',gl:'MA',ceid:'MA:fr',lang:'fr'},
+  ES:{name:'Espagne',flag:'🇪🇸',hl:'es',gl:'ES',ceid:'ES:es',lang:'es'},
+  MX:{name:'Mexique',flag:'🇲🇽',hl:'es-419',gl:'MX',ceid:'MX:es-419',lang:'es'},
+  AR:{name:'Argentine',flag:'🇦🇷',hl:'es-419',gl:'AR',ceid:'AR:es-419',lang:'es'},
+  GB:{name:'Royaume-Uni',flag:'🇬🇧',hl:'en-GB',gl:'GB',ceid:'GB:en',lang:'en'},
+  US:{name:'États-Unis',flag:'🇺🇸',hl:'en-US',gl:'US',ceid:'US:en',lang:'en'},
+  DE:{name:'Allemagne',flag:'🇩🇪',hl:'de',gl:'DE',ceid:'DE:de',lang:'de'},
+  IT:{name:'Italie',flag:'🇮🇹',hl:'it',gl:'IT',ceid:'IT:it',lang:'it'},
+  PT:{name:'Portugal',flag:'🇵🇹',hl:'pt-PT',gl:'PT',ceid:'PT:pt-150',lang:'pt'},
+};
+const THEMES = {
+  une:{name:'À la une',icon:'★',topic:null},
+  WORLD:{name:'Monde',icon:'🌍',topic:'WORLD'},
+  NATION:{name:'National',icon:'🏛',topic:'NATION'},
+  BUSINESS:{name:'Économie',icon:'📈',topic:'BUSINESS'},
+  TECHNOLOGY:{name:'Tech',icon:'💻',topic:'TECHNOLOGY'},
+  SCIENCE:{name:'Sciences',icon:'🔬',topic:'SCIENCE'},
+  HEALTH:{name:'Santé',icon:'🩺',topic:'HEALTH'},
+  SPORTS:{name:'Sport',icon:'⚽',topic:'SPORTS'},
+  ENTERTAINMENT:{name:'Culture',icon:'🎭',topic:'ENTERTAINMENT'},
+};
+/* Suggestions de journaux (RSS). Vérifiables/modifiables dans les réglages. */
+const PRESETS = {
+  FR:[['Le Monde','https://www.lemonde.fr/rss/une.xml'],['Le Figaro','https://www.lefigaro.fr/rss/figaro_actualites.xml'],['Libération','https://www.liberation.fr/arc/outboundfeeds/rss-all/?outputType=xml'],['franceinfo','https://www.francetvinfo.fr/titres.rss'],['France 24','https://www.france24.com/fr/rss']],
+  ES:[['El País','https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada'],['El Mundo','https://e00-elmundo.uecdn.es/elmundo/rss/portada.xml'],['ABC','https://www.abc.es/rss/2.0/portada/'],['La Vanguardia','https://www.lavanguardia.com/rss/home.xml'],['elDiario.es','https://www.eldiario.es/rss/']],
+  BE:[['Le Soir','https://www.lesoir.be/rss2/2/cible_principale']],
+  GB:[['BBC News','https://feeds.bbci.co.uk/news/rss.xml'],['The Guardian','https://www.theguardian.com/uk/rss']],
+  US:[['New York Times','https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml'],['NPR','https://feeds.npr.org/1001/rss.xml']],
+  DE:[['Tagesschau','https://www.tagesschau.de/xml/rss2/'],['Der Spiegel','https://www.spiegel.de/schlagzeilen/index.rss']],
+  IT:[['ANSA','https://www.ansa.it/sito/ansait_rss.xml'],['la Repubblica','https://www.repubblica.it/rss/homepage/rss2.0.xml']],
+};
+const PUBLIC_PROXIES = [
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+];
+const STOP = {
+  fr:'le la les un une des du de d l au aux et ou en à a dans par pour sur avec sans sous ce cette ces son sa ses leur leurs qui que quoi dont est sont été être a ont fait plus moins pas ne se s qu il elle ils elles on nous vous après avant contre entre selon vers comme mais donc car aussi très tout tous toute toutes',
+  es:'el la los las un una unos unas de del al y o en a por para con sin sobre entre tras ante bajo que se su sus lo le les es son fue ha han más menos no como pero ya muy este esta estos estas ese esa desde hasta según',
+  en:'the a an of to in on for with without and or but is are was were be been has have had it its this that these those as at by from after before over under into than more less not no who what says said will would can',
+  de:'der die das den dem des ein eine einer eines und oder in im am an auf für mit ohne von vom zu zum zur ist sind war wurde hat haben nicht nach vor über unter bei aus als auch wie',
+  it:'il lo la i gli le un una uno di del della dei delle a al alla ai da dal in nel nella con su sul per tra fra e o che non è sono ha hanno più come dopo',
+  pt:'o a os as um uma de do da dos das em no na nos nas por para com sem e ou que não é são foi tem mais como após sobre entre',
+};
+
+/* ====== État ====== */
+const KEY = 'kiosque.v1';
+const defaults = {countries:[], themes:['une','WORLD','NATION','BUSINESS','TECHNOLOGY','SCIENCE'], journals:[], proxy:'', saved:[], follows:[], visible:null, tab:'une', theme:'auto'};
+let S = load();
+function load(){ try{ return Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){ return {...defaults}; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+const mem = {}; // cache mémoire des flux
+function cacheGet(k){ if(mem[k]) return mem[k]; try{ const v=JSON.parse(localStorage.getItem('kq.c.'+k)||'null'); if(v) mem[k]=v; return v; }catch(e){ return null; } }
+function cacheSet(k,v){ mem[k]=v; try{ localStorage.setItem('kq.c.'+k, JSON.stringify(v)); }catch(e){ /* quota : on ignore */ } }
+
+/* ====== Utilitaires ====== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove('show'),2200); }
+function ago(d){ if(!d) return ''; const m=Math.round((Date.now()-d)/60000); if(m<1) return 'à l’instant'; if(m<60) return m+' min'; const h=Math.round(m/60); if(h<24) return h+' h'; const j=Math.round(h/24); return j+' j'; }
+function hash(s){ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))|0; return (h>>>0).toString(36); }
+function visibleCountries(){ const v=(S.visible||S.countries).filter(c=>S.countries.includes(c)); return v.length?v:S.countries; }
+
+async function fetchText(url){
+  const tries = [];
+  if(S.proxy){ const p=S.proxy.trim(); tries.push(p.includes('url=') ? p + encodeURIComponent(url) : p.replace(/\/?$/,'/') + '?url=' + encodeURIComponent(url)); }
+  else PUBLIC_PROXIES.forEach(f=>tries.push(f(url)));
+  let last;
+  for(const t of tries){
+    try{
+      const ctl = new AbortController(); const to=setTimeout(()=>ctl.abort(),12000);
+      const r = await fetch(t,{signal:ctl.signal}); clearTimeout(to);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const txt = await r.text();
+      if(!txt || txt.length<50) throw new Error('vide');
+      return txt;
+    }catch(e){ last=e; }
+  }
+  throw last||new Error('échec');
+}
+
+function gnUrl(country, theme){
+  const c=COUNTRIES[country], q=`hl=${c.hl}&gl=${c.gl}&ceid=${c.ceid}`;
+  const t=THEMES[theme];
+  return t && t.topic ? `https://news.google.com/rss/headlines/section/topic/${t.topic}?${q}` : `https://news.google.com/rss?${q}`;
+}
+function gnSearchUrl(country, query){
+  const c=COUNTRIES[country];
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query+' when:7d')}&hl=${c.hl}&gl=${c.gl}&ceid=${c.ceid}`;
+}
+
+/* Parse RSS 2.0 / Atom, y compris le bloc « couverture » de Google Actualités */
+function parseFeed(xml, country, fallbackSource){
+  const doc = new DOMParser().parseFromString(xml,'text/xml');
+  if(doc.querySelector('parsererror')) throw new Error('XML invalide');
+  const items = [...doc.querySelectorAll('item, entry')].slice(0,40);
+  return items.map(it=>{
+    const g = n => it.getElementsByTagName(n)[0];
+    let title = (g('title')?.textContent||'').trim();
+    let link = g('link')?.getAttribute('href') || g('link')?.textContent?.trim() || '';
+    const srcEl = g('source');
+    let source = srcEl?.textContent?.trim() || fallbackSource || '';
+    if(srcEl && title.endsWith(' - '+source)) title = title.slice(0, -(source.length+3));
+    const dateTxt = g('pubDate')?.textContent || g('published')?.textContent || g('updated')?.textContent || g('dc:date')?.textContent;
+    const date = dateTxt ? Date.parse(dateTxt) || 0 : 0;
+    const rawDesc = g('description')?.textContent || g('summary')?.textContent || g('content')?.textContent || '';
+    let related = [], desc = '';
+    if(/news\.google\./.test(link) && /<li>/i.test(rawDesc)){
+      const d = new DOMParser().parseFromString(rawDesc,'text/html');
+      related = [...d.querySelectorAll('li')].map(li=>{ const a=li.querySelector('a'); return a?{title:a.textContent.trim(), link:a.href, source:li.querySelector('font')?.textContent.trim()||''}:null; }).filter(Boolean).slice(1,8);
+    } else {
+      desc = new DOMParser().parseFromString(rawDesc,'text/html').body.textContent.replace(/\s+/g,' ').trim().slice(0,260);
+    }
+    let img = '';
+    const media = it.getElementsByTagName('media:content')[0] || it.getElementsByTagName('media:thumbnail')[0] || it.getElementsByTagName('enclosure')[0];
+    if(media && /image|jpe?g|png|webp/i.test((media.getAttribute('type')||'')+(media.getAttribute('url')||'')) ) img = media.getAttribute('url');
+    if(!img){ const m = rawDesc.match(/<img[^>]+src=["']([^"']+)/i); if(m) img=m[1]; }
+    return {title, link, source, date, desc, related, img, country, id:hash(link||title)};
+  }).filter(a=>a.title);
+}
+
+async function loadFeed(key, url, country, srcName, force){
+  const c = cacheGet(key);
+  if(c && !force && Date.now()-c.t < 10*60*1000) return c.items;
+  try{
+    const items = parseFeed(await fetchText(url), country, srcName);
+    cacheSet(key,{t:Date.now(), items});
+    return items;
+  }catch(e){
+    if(c) return c.items;
+    throw e;
+  }
+}
+
+/* ====== Rendu principal ====== */
+function renderHeader(){
+  $('#flags').innerHTML = S.countries.map(c=>`<button class="flag ${visibleCountries().includes(c)?'on':''}" data-c="${c}" title="${COUNTRIES[c].name}">${COUNTRIES[c].flag}</button>`).join('');
+  const tabs = S.themes.map(t=>[t, THEMES[t].name]);
+  if(S.journals.length) tabs.push(['journaux','Mes journaux']);
+  tabs.push(['compare','⇄ Comparer'], ['saved','☆ À lire']);
+  if(!tabs.some(t=>t[0]===S.tab)) S.tab = tabs[0][0];
+  $('#tabs').innerHTML = tabs.map(([k,n])=>`<button class="tab ${S.tab===k?'on':''}" data-t="${k}">${esc(n)}</button>`).join('');
+  $('#tabs .tab.on')?.scrollIntoView({inline:'center',block:'nearest'});
+}
+
+let renderToken = 0;
+async function renderFeed(force){
+  const tok = ++renderToken, feed = $('#feed'), tab = S.tab;
+  if(tab==='saved') return renderSaved();
+  if(tab==='compare') return renderCompareHome();
+  feed.innerHTML = `<div class="status">Chargement…</div>`;
+  const countries = visibleCountries();
+  const jobs = [];
+  if(tab!=='journaux') countries.forEach(c=>jobs.push(loadFeed(`gn.${c}.${tab}`, gnUrl(c,tab), c, '', force).catch(e=>({err:COUNTRIES[c].name}))));
+  S.journals.filter(j=>countries.includes(j.country) && (tab==='journaux' || j.theme===tab))
+    .forEach(j=>jobs.push(loadFeed(`j.${j.id}`, j.url, j.country, j.name, force).then(items=>items.map(i=>({...i, source:j.name, journal:true}))).catch(()=>({err:j.name}))));
+  const res = await Promise.all(jobs);
+  if(tok!==renderToken) return;
+  const errs = res.filter(r=>r&&r.err).map(r=>r.err);
+  let items = res.filter(Array.isArray).flat();
+  const seen = new Set(); items = items.filter(i=>!seen.has(i.id)&&seen.add(i.id));
+  // Alterner les pays pour éviter qu'un seul ne domine le haut du fil
+  items.sort((a,b)=>b.date-a.date);
+  if(countries.length>1 && tab!=='journaux'){
+    const byC = countries.map(c=>items.filter(i=>i.country===c)); const mixed=[];
+    for(let k=0; byC.some(l=>l.length); k++) byC.forEach(l=>{ if(l.length) mixed.push(l.shift()); });
+    items = mixed;
+  }
+  if(!items.length){
+    feed.innerHTML = `<div class="status">Aucun article chargé${errs.length?' ('+esc(errs.join(', '))+')':''}.<br>Vérifie ta connexion ou le relais (Réglages).</div>`;
+    return;
+  }
+  feed.innerHTML = (errs.length?`<div class="status">Indisponible : ${esc(errs.join(', '))}</div>`:'') +
+    items.map((a,i)=>card(a, i===0)).join('');
+  window._items = Object.fromEntries(items.map(a=>[a.id,a]));
+}
+
+function card(a, lead){
+  const c = COUNTRIES[a.country]; const saved = S.saved.some(s=>s.id===a.id);
+  return `<article class="card ${lead?'lead':''}" data-id="${a.id}">
+    <div class="meta"><span>${c?c.flag:''}</span><span class="src">${esc(a.source)}</span><span>· ${ago(a.date)}</span></div>
+    <div class="row"><div style="flex:1;min-width:0">
+      <a class="title" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.title)}</a>
+      ${a.desc?`<div class="desc">${esc(a.desc)}</div>`:''}
+    </div>${a.img?`<img class="thumb" src="${esc(a.img)}" loading="lazy" alt="" onerror="this.remove()">`:''}</div>
+    <div class="actions">
+      <button class="act hot" data-act="compare">⇄ Comparer</button>
+      ${a.related?.length?`<button class="act" data-act="related">Couverture (${a.related.length})</button>`:''}
+      <button class="act" data-act="save">${saved?'★ Gardé':'☆ À lire'}</button>
+    </div>
+  </article>`;
+}
+
+function renderSaved(){
+  const f=$('#feed');
+  if(!S.saved.length){ f.innerHTML=`<div class="status">Rien de côté pour l’instant. Touche « ☆ À lire » sur un article.</div>`; return; }
+  window._items = Object.fromEntries(S.saved.map(a=>[a.id,a]));
+  f.innerHTML = S.saved.map(a=>card(a,false)).join('');
+}
+
+function renderCompareHome(){
+  const f=$('#feed');
+  f.innerHTML = `<div class="sectiontitle">Comparer un sujet</div>
+    <form class="searchbar" id="cmpForm"><input id="cmpInput" placeholder="Ex. : élections, COP, Gaza, budget…" autocomplete="off"><button>OK</button></form>
+    <div class="hint">Les mots sont traduits automatiquement pour chaque pays ; tu peux corriger la recherche dans chaque colonne.</div>
+    <div class="sectiontitle">Sujets suivis</div>
+    ${S.follows.length ? S.follows.map((t,i)=>`<div class="card" style="display:flex;align-items:center;gap:8px"><button style="flex:1;text-align:left" class="serif" data-follow="${i}"><b>${esc(t.label)}</b><br><small style="color:var(--ink3)">${t.countries.map(c=>COUNTRIES[c]?.flag).join(' ')}</small></button><button class="iconbtn" data-unfollow="${i}">✕</button></div>`).join('') : `<div class="status">Aucun. Dans une comparaison, touche ☆ pour suivre le sujet.</div>`}`;
+  $('#cmpForm').onsubmit = e=>{ e.preventDefault(); const v=$('#cmpInput').value.trim(); if(v) openCompare({label:v, query:v}); };
+}
+
+/* ====== Comparaison ====== */
+async function translate(text, to){
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${to}&dt=t&q=${encodeURIComponent(text)}`;
+  const k='tr.'+to+'.'+hash(text); const c=cacheGet(k); if(c) return c.v;
+  try{ const j = JSON.parse(await fetchText(url)); const v=j[0].map(x=>x[0]).join(''); const det=j[2]; cacheSet(k,{v,det}); return v; }
+  catch(e){ return null; }
+}
+function keywords(text, lang, max=5){
+  const stop = new Set((STOP[lang]||'').split(' '));
+  const words = text.replace(/[«»"“”’'(),.:;!?¿¡–—\-]/g,' ').split(/\s+/).filter(w=>w.length>2 && !stop.has(w.toLowerCase()));
+  const uniq=[...new Set(words)];
+  // Priorité aux noms propres et aux mots longs
+  uniq.sort((a,b)=>(/^[A-ZÀ-Ý]/.test(b)-/^[A-ZÀ-Ý]/.test(a)) || b.length-a.length);
+  return uniq.slice(0,max).join(' ');
+}
+let cmp = null;
+async function openCompare(topic){
+  // topic: {label, query, srcLang?, queries?}
+  const countries = topic.countries || S.countries;
+  cmp = {label:topic.label, query:topic.query, countries, queries: topic.queries ? {...topic.queries} : {}};
+  $('#compareTitle').textContent = topic.label;
+  $('#followBtn').textContent = S.follows.some(f=>f.label===topic.label) ? '★' : '☆';
+  $('#compareDots').innerHTML = countries.map((c,i)=>`<button data-col="${i}">${COUNTRIES[c].flag} ${COUNTRIES[c].name}</button>`).join('');
+  $('#compareCols').innerHTML = countries.map(c=>`<div class="col" data-c="${c}">
+    <h4>${COUNTRIES[c].flag} ${COUNTRIES[c].name}</h4>
+    <form class="q"><input value="" placeholder="Traduction…"><button class="act hot">↻</button></form>
+    <div class="res"><div class="status">Préparation…</div></div></div>`).join('');
+  $('#compare').classList.add('open');
+  history.pushState({sheet:'compare'},'');
+  const langs = [...new Set(countries.filter(c=>!cmp.queries[c]).map(c=>COUNTRIES[c].lang))];
+  const trans = {};
+  await Promise.all(langs.map(async l=>{ trans[l] = (await translate(topic.query, l)) || topic.query; }));
+  countries.forEach(c=>{
+    const lang = COUNTRIES[c].lang;
+    const q = cmp.queries[c] || keywords(trans[lang], lang) || trans[lang];
+    cmp.queries[c] = q;
+    const col = $(`.col[data-c="${c}"]`); col.querySelector('input').value = q;
+    col.querySelector('form').onsubmit = e=>{ e.preventDefault(); cmp.queries[c]=col.querySelector('input').value.trim(); runCol(c); };
+    runCol(c);
+  });
+}
+async function runCol(c){
+  const col = $(`.col[data-c="${c}"]`); if(!col) return;
+  const res = col.querySelector('.res'); res.innerHTML = `<div class="status">Recherche…</div>`;
+  let q = cmp.queries[c], items=[];
+  try{
+    items = await loadFeed('s.'+c+'.'+hash(q), gnSearchUrl(c,q), c, '', false);
+    if(!items.length && q.split(' ').length>3){ q=q.split(' ').slice(0,3).join(' '); items = await loadFeed('s.'+c+'.'+hash(q), gnSearchUrl(c,q), c, '', false); }
+  }catch(e){ res.innerHTML=`<div class="status">Échec du chargement.</div>`; return; }
+  res.innerHTML = items.length ? items.slice(0,15).map(a=>`<div class="item"><a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.title)}</a><small>${esc(a.source)} · ${ago(a.date)}</small></div>`).join('')
+    : `<div class="status">Rien trouvé. Simplifie les mots-clés ci-dessus.</div>`;
+}
+function articleToTopic(a){
+  return {label:a.title.length>60?a.title.slice(0,58)+'…':a.title, query:a.title};
+}
+
+/* ====== Réglages ====== */
+function openSettings(first){
+  const draft = JSON.parse(JSON.stringify(S));
+  let step = first ? 1 : 0;
+  const body = $('#settingsBody');
+  $('#settingsClose').style.visibility = first ? 'hidden':'visible';
+  function countriesBlock(){
+    return `<h3>Pays de la presse</h3><div class="hint">Choisis de 1 à 3 pays (${draft.countries.length}/3).</div>
+      <div class="grid">${Object.entries(COUNTRIES).map(([k,c])=>`<button class="pick ${draft.countries.includes(k)?'on':''}" data-pc="${k}">${c.flag} ${c.name}</button>`).join('')}</div>`;
+  }
+  function themesBlock(){
+    return `<h3>Thèmes (onglets)</h3><div class="hint">Dans l’ordre où tu les touches.</div>
+      <div class="grid">${Object.entries(THEMES).map(([k,t])=>`<button class="pick ${draft.themes.includes(k)?'on':''}" data-pt="${k}">${t.icon} ${t.name}</button>`).join('')}</div>`;
+  }
+  function journalsBlock(){
+    const sugg = draft.countries.flatMap(c=>(PRESETS[c]||[]).map(([n,u])=>({n,u,c}))).filter(p=>!draft.journals.some(j=>j.url===p.u));
+    const themeOpts = sel => `<option value="journaux" ${sel==='journaux'?'selected':''}>Onglet « Mes journaux »</option>`+Object.entries(THEMES).map(([k,t])=>`<option value="${k}" ${sel===k?'selected':''}>Mêlé à : ${t.name}</option>`).join('');
+    return `<h3>Mes journaux</h3><div class="hint">Leurs articles s’ajoutent à l’onglet choisi.</div>
+      ${draft.journals.map((j,i)=>`<div class="jrow"><span>${COUNTRIES[j.country]?.flag||''}</span><div class="n"><b>${esc(j.name)}</b><small>${esc(j.url)}</small></div>
+        <select data-jt="${i}" style="width:auto;max-width:42%;padding:6px">${themeOpts(j.theme)}</select><button class="iconbtn" data-jdel="${i}">✕</button></div>`).join('') || '<div class="hint">Aucun journal ajouté.</div>'}
+      ${sugg.length?`<div class="hint" style="margin-top:12px">Suggestions :</div><div style="display:flex;flex-wrap:wrap;gap:6px">${sugg.map((p,i)=>`<button class="act" data-padd="${i}">+ ${COUNTRIES[p.c].flag} ${esc(p.n)}</button>`).join('')}</div>`:''}
+      <div class="form2">
+        <input class="full" id="jName" placeholder="Nom du journal">
+        <input class="full" id="jUrl" placeholder="Adresse du flux RSS (https://…)">
+        <select id="jCountry">${draft.countries.map(c=>`<option value="${c}">${COUNTRIES[c].flag} ${COUNTRIES[c].name}</option>`).join('')}</select>
+        <select id="jTheme">${themeOpts('journaux')}</select>
+        <button class="btn ghost full" style="margin-top:0" id="jAdd">Ajouter ce journal</button>
+      </div>`;
+    // sugg kept in closure for click handler
+  }
+  function advancedBlock(){
+    return `<h3>Relais (proxy)</h3><div class="hint">Adresse de ton Cloudflare Worker. Vide = relais publics (dépannage, moins fiables).</div>
+      <input id="proxy" value="${esc(draft.proxy)}" placeholder="https://kiosque-relais.xxx.workers.dev">
+      <h3>Apparence</h3><div class="grid">${[['auto','Auto'],['light','Clair'],['dark','Sombre']].map(([k,n])=>`<button class="pick ${draft.theme===k?'on':''}" data-th="${k}">${n}</button>`).join('')}</div>
+      <button class="btn ghost" id="clearCache">Vider le cache des articles</button>`;
+  }
+  function draw(){
+    let html='';
+    if(step===1){ $('#settingsTitle').textContent='Bienvenue — 1/2'; html = countriesBlock() + `<button class="btn" id="next" ${draft.countries.length?'':'disabled style="opacity:.5"'}>Suivant</button>`; }
+    else if(step===2){ $('#settingsTitle').textContent='Bienvenue — 2/2'; html = themesBlock() + `<button class="btn" id="done">C’est parti</button><div class="hint" style="text-align:center;margin-top:10px">Tu pourras ajouter tes journaux dans ⚙ Réglages.</div>`; }
+    else { $('#settingsTitle').textContent='Réglages'; html = countriesBlock()+themesBlock()+journalsBlock()+advancedBlock()+`<button class="btn" id="done">Enregistrer</button>`; }
+    body.innerHTML = html;
+    const sugg = draft.countries.flatMap(c=>(PRESETS[c]||[]).map(([n,u])=>({n,u,c}))).filter(p=>!draft.journals.some(j=>j.url===p.u));
+    body.onclick = e=>{
+      const b = e.target.closest('button'); if(!b) return;
+      if(b.dataset.pc){ const k=b.dataset.pc, i=draft.countries.indexOf(k);
+        if(i>=0) draft.countries.splice(i,1); else if(draft.countries.length<3) draft.countries.push(k); else return toast('3 pays maximum');
+        draw(); }
+      else if(b.dataset.pt){ const k=b.dataset.pt, i=draft.themes.indexOf(k);
+        if(i>=0){ if(draft.themes.length>1) draft.themes.splice(i,1); } else draft.themes.push(k); draw(); }
+      else if(b.dataset.th){ draft.theme=b.dataset.th; draw(); }
+      else if(b.dataset.jdel){ draft.journals.splice(+b.dataset.jdel,1); draw(); }
+      else if(b.dataset.padd){ const p=sugg[+b.dataset.padd]; draft.journals.push({id:hash(p.u),name:p.n,url:p.u,country:p.c,theme:'journaux'}); draw(); }
+      else if(b.id==='jAdd'){ const n=$('#jName').value.trim(), u=$('#jUrl').value.trim();
+        if(!n||!/^https?:\/\//.test(u)) return toast('Nom et adresse https requis');
+        draft.journals.push({id:hash(u),name:n,url:u,country:$('#jCountry').value,theme:$('#jTheme').value}); draw(); }
+      else if(b.id==='clearCache'){ Object.keys(localStorage).filter(k=>k.startsWith('kq.c.')).forEach(k=>localStorage.removeItem(k)); for(const k in mem) delete mem[k]; toast('Cache vidé'); }
+      else if(b.id==='next'){ if(draft.countries.length){ step=2; draw(); } }
+      else if(b.id==='done'){
+        if(!draft.countries.length) return toast('Choisis au moins un pays');
+        if($('#proxy')) draft.proxy = $('#proxy').value.trim();
+        draft.journals = draft.journals.filter(j=>draft.countries.includes(j.country));
+        Object.assign(S, {countries:draft.countries, themes:draft.themes, journals:draft.journals, proxy:draft.proxy, theme:draft.theme, visible:null});
+        save(); applyTheme(); closeSettings(); renderHeader(); renderFeed();
+      }
+    };
+    body.onchange = e=>{ const s=e.target; if(s.dataset.jt!==undefined) draft.journals[+s.dataset.jt].theme = s.value; };
+  }
+  draw();
+  $('#settings').classList.add('open');
+  if(!first) history.pushState({sheet:'settings'},'');
+}
+function closeSettings(){ $('#settings').classList.remove('open'); }
+function applyTheme(){ if(S.theme==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme=S.theme; }
+
+/* ====== Événements ====== */
+$('#settingsBtn').onclick = ()=>openSettings(false);
+$('#settingsClose').onclick = ()=>history.back();
+$('#compareClose').onclick = ()=>history.back();
+window.addEventListener('popstate', ()=>{ $('#compare').classList.remove('open'); if(S.countries.length) closeSettings(); });
+$('#refreshBtn').onclick = ()=>{ renderFeed(true); toast('Actualisation…'); };
+$('#flags').onclick = e=>{ const b=e.target.closest('.flag'); if(!b) return;
+  let v = [...visibleCountries()]; const c=b.dataset.c;
+  if(v.includes(c)){ if(v.length===1) return; v=v.filter(x=>x!==c); } else v.push(c);
+  S.visible = v.length===S.countries.length ? null : v; save(); renderHeader(); renderFeed(); };
+$('#tabs').onclick = e=>{ const b=e.target.closest('.tab'); if(!b) return; setTab(b.dataset.t); };
+function setTab(t){ S.tab=t; save(); renderHeader(); window.scrollTo({top:0}); renderFeed(); }
+$('#feed').onclick = e=>{
+  const fb = e.target.closest('[data-follow]'); if(fb){ openCompare(S.follows[+fb.dataset.follow]); return; }
+  const ub = e.target.closest('[data-unfollow]'); if(ub){ S.follows.splice(+ub.dataset.unfollow,1); save(); renderCompareHome(); return; }
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const cardEl = b.closest('.card'), a = window._items?.[cardEl.dataset.id]; if(!a) return;
+  if(b.dataset.act==='compare') openCompare(articleToTopic(a));
+  else if(b.dataset.act==='save'){
+    const i=S.saved.findIndex(s=>s.id===a.id);
+    if(i>=0){ S.saved.splice(i,1); toast('Retiré'); } else { S.saved.unshift(a); S.saved=S.saved.slice(0,100); toast('Gardé pour plus tard'); }
+    save(); if(S.tab==='saved') renderSaved(); else b.textContent = i>=0?'☆ À lire':'★ Gardé';
+  }
+  else if(b.dataset.act==='related'){
+    const ex = cardEl.querySelector('.related'); if(ex){ ex.remove(); return; }
+    cardEl.insertAdjacentHTML('beforeend', `<ul class="related">${a.related.map(r=>`<li><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a> <small>${esc(r.source)}</small></li>`).join('')}</ul>`);
+  }
+};
+$('#followBtn').onclick = ()=>{
+  if(!cmp) return;
+  const i=S.follows.findIndex(f=>f.label===cmp.label);
+  if(i>=0){ S.follows.splice(i,1); $('#followBtn').textContent='☆'; toast('Sujet retiré'); }
+  else { S.follows.unshift({label:cmp.label, query:cmp.query, countries:cmp.countries, queries:{...cmp.queries}}); $('#followBtn').textContent='★'; toast('Sujet suivi (onglet Comparer)'); }
+  save(); if(S.tab==='compare') renderCompareHome();
+};
+$('#compareDots').onclick = e=>{ const b=e.target.closest('button'); if(!b) return; $('#compareCols').children[+b.dataset.col]?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}); };
+
+/* Balayage horizontal entre onglets + tirer pour actualiser */
+let sx=0, sy=0, pulling=false;
+const feedEl = $('#feed');
+feedEl.addEventListener('touchstart', e=>{ sx=e.touches[0].clientX; sy=e.touches[0].clientY; pulling = window.scrollY<=0; }, {passive:true});
+feedEl.addEventListener('touchmove', e=>{ if(!pulling) return; const dy=e.touches[0].clientY-sy; $('#ptr').style.height = dy>70 && Math.abs(e.touches[0].clientX-sx)<40 ? '28px':'0'; }, {passive:true});
+feedEl.addEventListener('touchend', e=>{
+  const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
+  if($('#ptr').style.height==='28px'){ $('#ptr').style.height='0'; renderFeed(true); toast('Actualisation…'); return; }
+  if(Math.abs(dx)>80 && Math.abs(dy)<50){
+    const tabs=[...document.querySelectorAll('.tab')].map(t=>t.dataset.t), i=tabs.indexOf(S.tab);
+    const n = tabs[i + (dx<0?1:-1)]; if(n) setTab(n);
+  }
+}, {passive:true});
+
+/* ====== Démarrage ====== */
+applyTheme();
+if(!S.countries.length){ openSettings(true); }
+else { renderHeader(); renderFeed(); }
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
