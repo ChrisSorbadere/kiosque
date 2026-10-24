@@ -18,11 +18,11 @@ while read -r cc hl gl ceid; do
     if [ "$th" = "une" ]; then url="https://news.google.com/rss?$q"
     else url="https://news.google.com/rss/headlines/section/topic/$th?$q"; fi
     out="$SITE/data/$cc-$th.xml"
-    if curl -sfL -m 20 -A "$UA" -H "Accept-Language: $hl" "$url" -o "$out" && grep -q "<item>" "$out"; then
+    if curl -sfL -m 12 --retry 2 --retry-delay 4 -A "$UA" -H "Accept-Language: $hl" "$url" -o "$out" && grep -q "<item>" "$out"; then
       ok=$((ok+1))
     else
       ko=$((ko+1)); failed="$failed $cc-$th"
-      curl -sfL -m 20 "$PUBLISHED/$cc-$th.xml" -o "$out" || rm -f "$out"
+      curl -sfL -m 10 "$PUBLISHED/$cc-$th.xml" -o "$out" || rm -f "$out"
     fi
     sleep 0.3
   done
@@ -48,6 +48,6 @@ if [ "$ok" -eq 0 ]; then
 else
   printf '{"updated":%s,"ok":%d,"ko":%d,"failed":"%s"}\n' "$(date +%s)000" "$ok" "$ko" "${failed# }" > "$SITE/data/status.json"
 fi
-echo "Flux récupérés : $ok — échecs : $ko"
+echo "::notice::Flux récupérés : $ok — échecs : $ko — durée : ${SECONDS}s"
 [ "$ko" -gt 0 ] && echo "Échecs :$failed"
 exit 0
