@@ -61,6 +61,14 @@ main{max-width:760px;margin:0 auto;padding:12px 16px 90px;min-height:70vh}
 .related li{padding:5px 0;font-size:14px}
 .related a{text-decoration:none}
 .related small{color:var(--ink3)}
+.others{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.others .q{display:flex;gap:6px;margin-bottom:4px}
+.others .q input{padding:8px 10px;font-size:14px}
+.others .item{padding:9px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}
+.others .item:last-child{border:0}
+.others .item a{text-decoration:none;font-family:Georgia,serif;font-weight:600;line-height:1.3;display:block;font-size:15px}
+.others .item small{color:var(--ink3);display:flex;align-items:center;gap:5px;margin-top:3px}
+.others .item img.thumb{width:64px;height:64px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--surface2)}
 .lead .title{font-size:21px}
 .sectiontitle{font-family:Georgia,serif;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:18px 2px 8px}
 
@@ -326,7 +334,7 @@ function card(a, lead){
     </div>${a.img?`<img class="thumb" src="${esc(a.img)}" loading="lazy" alt="" onerror="this.remove()">`:''}</div>
     <div class="actions">
       <button class="act hot" data-act="compare">⇄ Comparer</button>
-      ${a.related?.length?`<button class="act" data-act="related">Couverture (${a.related.length})</button>`:''}
+      <button class="act" data-act="others">Autres titres</button>
       <button class="act" data-act="save">${saved?'★ Gardé':'☆ À lire'}</button>
     </div>
   </article>`;
@@ -522,11 +530,38 @@ $('#feed').onclick = e=>{
     if(i>=0){ S.saved.splice(i,1); toast('Retiré'); } else { S.saved.unshift(a); S.saved=S.saved.slice(0,100); toast('Gardé pour plus tard'); }
     save(); if(S.tab==='saved') renderSaved(); else b.textContent = i>=0?'☆ À lire':'★ Gardé';
   }
-  else if(b.dataset.act==='related'){
-    const ex = cardEl.querySelector('.related'); if(ex){ ex.remove(); return; }
-    cardEl.insertAdjacentHTML('beforeend', `<ul class="related">${a.related.map(r=>`<li><a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.title)}</a> <small>${esc(r.source)}</small></li>`).join('')}</ul>`);
+  else if(b.dataset.act==='others'){
+    const ex = cardEl.querySelector('.others'); if(ex){ ex.remove(); b.classList.remove('hot'); return; }
+    b.classList.add('hot');
+    const q = keywords(a.title, COUNTRIES[a.country]?.lang||'fr') || a.title;
+    cardEl.insertAdjacentHTML('beforeend', `<div class="others"><form class="q"><input value="${esc(q)}"><button class="act hot">↻</button></form><div class="res"><div class="status">Recherche…</div></div></div>`);
+    runOthers(a, cardEl.querySelector('.others'), q);
   }
 };
+$('#feed').addEventListener('submit', e=>{
+  const panel = e.target.closest('.others'); if(!panel) return;
+  e.preventDefault();
+  const a = window._items?.[panel.closest('.card').dataset.id]; if(!a) return;
+  runOthers(a, panel, panel.querySelector('input').value.trim());
+});
+/* Même information dans d'autres journaux du même pays : Google (couverture) + Bing */
+async function runOthers(a, panel, q){
+  const res = panel.querySelector('.res'); res.innerHTML = `<div class="status">Recherche…</div>`;
+  const norm = t => (t||'').toLowerCase().replace(/\s+via msn$/,'').trim();
+  let bing = [];
+  try{
+    bing = await loadFeed('o.'+a.country+'.'+hash(q), searchUrl(a.country,q), a.country, '', false);
+    if(!bing.length && q.split(' ').length>3){ const q3=q.split(' ').slice(0,3).join(' '); bing = await loadFeed('o.'+a.country+'.'+hash(q3), searchUrl(a.country,q3), a.country, '', false); }
+  }catch(e){}
+  const google = (a.related||[]).map(r=>({...r, country:a.country}));
+  const seen = new Set([norm(a.source)]), out = [];
+  for(const it of [...google, ...[...bing].sort((x,y)=>y.date-x.date)]){
+    const k = norm(it.source); if(!k || seen.has(k) || it.link===a.link) continue;
+    seen.add(k); out.push(it); if(out.length>=10) break;
+  }
+  res.innerHTML = out.length ? out.map(it=>`<div class="item"><div style="flex:1;min-width:0"><a href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.title)}</a><small>${logo(it)}${esc(it.source)}${it.date?' · '+ago(it.date):''}</small></div>${it.img?`<img class="thumb" src="${esc(it.img)}" loading="lazy" alt="" onerror="this.remove()">`:''}</div>`).join('')
+    : `<div class="status">Aucun autre titre trouvé. Simplifie les mots-clés ci-dessus.</div>`;
+}
 $('#followBtn').onclick = ()=>{
   if(!cmp) return;
   const i=S.follows.findIndex(f=>f.label===cmp.label);
