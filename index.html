@@ -200,7 +200,7 @@ const STOP = {
 
 /* ====== État ====== */
 const KEY = 'kiosque.v1';
-const defaults = {countries:[], themes:['une','WORLD','NATION','BUSINESS','TECHNOLOGY','SCIENCE'], journals:[], regionals:null, regInit:false, prio:{}, prioNames:{}, proxy:'', saved:[], follows:[], visible:null, tab:'une', theme:'auto'};
+const defaults = {countries:[], themes:['une','WORLD','NATION','BUSINESS','TECHNOLOGY','SCIENCE'], journals:[], tabOrder:null, regionals:null, regInit:false, prio:{}, prioNames:{}, proxy:'', saved:[], follows:[], visible:null, tab:'une', theme:'auto'};
 const REGIONAL_PRESETS = [
   {id:'heraldo', name:'Heraldo de Aragón', site:'heraldo.es', country:'ES'},
   {id:'pdaragon', name:'El Periódico de Aragón', site:'elperiodicodearagon.com', country:'ES'},
@@ -325,11 +325,21 @@ async function loadFeed(key, url, country, srcName, force){
 }
 
 /* ====== Rendu principal ====== */
+const TAB_EXTRA = {journaux:'Mes journaux', compare:'⇄ Comparer', saved:'☆ À lire'};
+/* Onglets disponibles, dans l'ordre choisi (les nouveaux se placent à leur rang par défaut) */
+function tabList(st){
+  const base = st.themes.map(t=>[t, THEMES[t].name]);
+  if(st.journals.length) base.push(['journaux', TAB_EXTRA.journaux]);
+  base.push(['compare', TAB_EXTRA.compare], ['saved', TAB_EXTRA.saved]);
+  const order = st.tabOrder || [];
+  const known = base.filter(t=>order.includes(t[0])).sort((a,b)=>order.indexOf(a[0])-order.indexOf(b[0]));
+  const out = [...known];
+  base.forEach((t,i)=>{ if(!order.includes(t[0])) out.splice(Math.min(i,out.length),0,t); });
+  return out;
+}
 function renderHeader(){
   $('#flags').innerHTML = S.countries.map(c=>`<button class="flag ${visibleCountries().includes(c)?'on':''}" data-c="${c}" title="${COUNTRIES[c].name}">${COUNTRIES[c].flag}</button>`).join('');
-  const tabs = S.themes.map(t=>[t, THEMES[t].name]);
-  if(S.journals.length) tabs.push(['journaux','Mes journaux']);
-  tabs.push(['compare','⇄ Comparer'], ['saved','☆ À lire']);
+  const tabs = tabList(S);
   if(!tabs.some(t=>t[0]===S.tab)) S.tab = tabs[0][0];
   $('#tabs').innerHTML = tabs.map(([k,n])=>`<button class="tab ${S.tab===k?'on':''}" data-t="${k}">${esc(n)}</button>`).join('');
   $('#tabs .tab.on')?.scrollIntoView({inline:'center',block:'nearest'});
@@ -501,7 +511,7 @@ function openSettings(first){
       <div class="grid">${Object.entries(COUNTRIES).map(([k,c])=>`<button class="pick ${draft.countries.includes(k)?'on':''}" data-pc="${k}">${c.flag} ${c.name}</button>`).join('')}</div>`;
   }
   function themesBlock(){
-    return `<h3>Thèmes (onglets)</h3><div class="hint">Dans l’ordre où tu les touches.</div>
+    return `<h3>Thèmes (onglets)</h3><div class="hint">Active ou désactive les thèmes ; leur ordre se règle juste en dessous.</div>
       <div class="grid">${Object.entries(THEMES).map(([k,t])=>`<button class="pick ${draft.themes.includes(k)?'on':''}" data-pt="${k}">${t.icon} ${t.name}</button>`).join('')}</div>`;
   }
   function journalsBlock(){
@@ -531,6 +541,13 @@ function openSettings(first){
         <button class="btn ghost full" style="margin-top:0" id="rAdd">Ajouter ce journal régional</button>
       </div>`;
   }
+  function orderBlock(){
+    const list = tabList(draft);
+    return `<h3>Ordre des onglets</h3><div class="hint">Flèches pour déplacer un onglet vers la gauche (↑) ou la droite (↓).</div>
+      ${list.map(([k,n],i)=>`<div class="jrow"><div class="n"><b>${esc(n)}</b></div>
+        <button class="iconbtn" data-mv="${k}" data-d="-1" ${i===0?'disabled style="opacity:.25"':''}>↑</button>
+        <button class="iconbtn" data-mv="${k}" data-d="1" ${i===list.length-1?'disabled style="opacity:.25"':''}>↓</button></div>`).join('')}`;
+  }
   function prioBlock(){
     const e = Object.entries(draft.prio||{});
     const row = ([k,v]) => `<div class="jrow"><span>${v==='p'?'★':'🚫'}</span><div class="n"><b>${esc((S.prioNames||{})[k]||k)}</b><small>${v==='p'?'Prioritaire':'Masqué'}</small></div><button class="iconbtn" data-pdel="${esc(k)}">✕</button></div>`;
@@ -548,7 +565,7 @@ function openSettings(first){
     let html='';
     if(step===1){ $('#settingsTitle').textContent='Bienvenue — 1/2'; html = countriesBlock() + `<button class="btn" id="next" ${draft.countries.length?'':'disabled style="opacity:.5"'}>Suivant</button>`; }
     else if(step===2){ $('#settingsTitle').textContent='Bienvenue — 2/2'; html = themesBlock() + `<button class="btn" id="done">C’est parti</button><div class="hint" style="text-align:center;margin-top:10px">Tu pourras ajouter tes journaux dans ⚙ Réglages.</div>`; }
-    else { $('#settingsTitle').textContent='Réglages'; html = countriesBlock()+themesBlock()+journalsBlock()+regionalBlock()+prioBlock()+advancedBlock()+`<button class="btn" id="done">Enregistrer</button>`; }
+    else { $('#settingsTitle').textContent='Réglages'; html = countriesBlock()+themesBlock()+orderBlock()+journalsBlock()+regionalBlock()+prioBlock()+advancedBlock()+`<button class="btn" id="done">Enregistrer</button>`; }
     body.innerHTML = html;
     const sugg = draft.countries.flatMap(c=>(PRESETS[c]||[]).map(([n,u])=>({n,u,c}))).filter(p=>!draft.journals.some(j=>j.url===p.u));
     body.onclick = e=>{
@@ -559,6 +576,13 @@ function openSettings(first){
       else if(b.dataset.pt){ const k=b.dataset.pt, i=draft.themes.indexOf(k);
         if(i>=0){ if(draft.themes.length>1) draft.themes.splice(i,1); } else draft.themes.push(k); draw(); }
       else if(b.dataset.th){ draft.theme=b.dataset.th; draw(); }
+      else if(b.dataset.mv){
+        const keys = tabList(draft).map(t=>t[0]), i = keys.indexOf(b.dataset.mv), j = i + (+b.dataset.d);
+        if(i<0 || j<0 || j>=keys.length) return;
+        [keys[i], keys[j]] = [keys[j], keys[i]];
+        draft.tabOrder = [...keys, ...(draft.tabOrder||[]).filter(k=>!keys.includes(k))]; draw();
+        body.querySelector(`[data-mv="${b.dataset.mv}"][data-d="${b.dataset.d}"]`)?.scrollIntoView({block:'center'});
+      }
       else if(b.dataset.rdel){ draft.regionals.splice(+b.dataset.rdel,1); draw(); }
       else if(b.id==='rAdd'){ const n=$('#rName').value.trim(), st=cleanSite($('#rSite').value);
         if(!n || !/\.[a-z]{2,}$/.test(st)) return toast('Nom et site requis (ex. heraldo.es)');
@@ -582,7 +606,7 @@ function openSettings(first){
         if(!draft.countries.length) return toast('Choisis au moins un pays');
         if($('#proxy')) draft.proxy = $('#proxy').value.trim();
         draft.journals = draft.journals.filter(j=>draft.countries.includes(j.country));
-        Object.assign(S, {countries:draft.countries, themes:draft.themes, journals:draft.journals, regionals:draft.regionals||[], prio:draft.prio||{}, proxy:draft.proxy, theme:draft.theme, visible:null});
+        Object.assign(S, {countries:draft.countries, themes:draft.themes, journals:draft.journals, tabOrder:draft.tabOrder||null, regionals:draft.regionals||[], prio:draft.prio||{}, proxy:draft.proxy, theme:draft.theme, visible:null});
         save(); applyTheme(); closeSettings(); renderHeader(); renderFeed();
       }
     };
