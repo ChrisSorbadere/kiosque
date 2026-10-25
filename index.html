@@ -49,7 +49,10 @@ main{max-width:760px;margin:0 auto;padding:12px 16px 90px;min-height:70vh}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
 .meta{display:flex;align-items:center;gap:6px;color:var(--ink3);font-size:12.5px;margin-bottom:6px}
 .logo{width:18px;height:18px;border-radius:4px;background:#fff;object-fit:contain;flex-shrink:0}
-.meta .src{color:var(--ink2);font-weight:600;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta .src{color:var(--ink2);font-weight:600;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0}
+.meta .src.p{color:var(--accent)}
+.srcmenu{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px;padding:8px;border-radius:10px;background:var(--surface2)}
+.srcmenu .act.on{background:var(--accent);color:var(--accent-ink)}
 .title{font-family:Georgia,serif;font-size:17.5px;line-height:1.3;font-weight:600;text-decoration:none;display:block}
 .row{display:flex;gap:10px}
 .row .thumb{width:84px;height:84px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--surface2)}
@@ -194,7 +197,7 @@ const STOP = {
 
 /* ====== État ====== */
 const KEY = 'kiosque.v1';
-const defaults = {countries:[], themes:['une','WORLD','NATION','BUSINESS','TECHNOLOGY','SCIENCE'], journals:[], proxy:'', saved:[], follows:[], visible:null, tab:'une', theme:'auto'};
+const defaults = {countries:[], themes:['une','WORLD','NATION','BUSINESS','TECHNOLOGY','SCIENCE'], journals:[], prio:{}, prioNames:{}, proxy:'', saved:[], follows:[], visible:null, tab:'une', theme:'auto'};
 let S = load();
 function load(){ try{ const v=Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY)||'{}')); if(/media-proxy/.test(v.proxy)) v.proxy=''; return v; }catch(e){ return {...defaults}; } }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
@@ -209,9 +212,31 @@ function toast(t){ const el=$('#toast'); el.textContent=t; el.classList.add('sho
 function ago(d){ if(!d) return ''; const m=Math.round((Date.now()-d)/60000); if(m<1) return 'à l’instant'; if(m<60) return m+' min'; const h=Math.round(m/60); if(h<24) return h+' h'; const j=Math.round(h/24); return j+' j'; }
 function siteOf(a){ if(a.site) return a.site; try{ return new URL(a.journal ? (S.journals.find(j=>j.name===a.source)?.url||a.link) : a.link).hostname.replace(/^www\./,''); }catch(e){ return ''; } }
 function logo(a){ const d=siteOf(a); return d && !/news\.google\./.test(d) ? `<img class="logo" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=64" alt="" loading="lazy" onerror="this.remove()">` : ''; }
-function langOf(a){ return COUNTRIES[a.country]?.lang || 'fr'; }
+const DETECT = {
+  fr:STOP.fr, es:STOP.es, en:STOP.en, de:STOP.de, it:STOP.it, pt:STOP.pt,
+  eu:'eta da du dute dira zen ere bat ez baina izan egin behar aurka gaur urte ondoren beste hori hau dago ditu dela duela zuen edo baino bezala arteko',
+  ca:'el la de en un i els les amb per dels una que és són també però més aquest aquesta va han seu seva sobre fins després uns ja hi ho al pel pels això',
+  gl:'a o e de en un que se os as unha non polo pola polos coa cos máis tamén despois sobre ás ao aos dos das para pero xa como',
+};
+const DETECT_SETS = Object.fromEntries(Object.entries(DETECT).map(([k,v])=>[k,new Set(v.split(' '))]));
+const DETECT_EXCL = new Set(Object.entries(DETECT_SETS).flatMap(([l,set])=>[...set].filter(w=>Object.entries(DETECT_SETS).every(([l2,s2])=>l2===l||!s2.has(w))).map(w=>l+':'+w)));
+function detectLang(text, fallback){
+  const words = (text||'').toLowerCase().replace(/[«»"“”’'(),.:;!?¿¡–—|\-]/g,' ').split(/\s+/).filter(Boolean);
+  const sc = {};
+  for(const [l,set] of Object.entries(DETECT_SETS)) sc[l] = words.reduce((n,w)=>n + (set.has(w) ? (DETECT_EXCL.has(l+':'+w) ? 2 : 1) : 0), 0);
+  // indices propres au basque : tx, tz, tzeko, -aren, -ean
+  sc.eu += words.filter(w=>/tx|tz|(aren|ean|ko|tzeko|ak)$/.test(w) && !/[áéíóúñ]/.test(w)).length * 0.5;
+  const best = Object.entries(sc).sort((a,b)=>b[1]-a[1])[0];
+  if(!best || best[1] < 2 || (sc[fallback]||0) >= best[1]) return fallback;   // à égalité, on garde la langue du pays
+  return best[0];
+}
+function langOf(a){ if(!a._lang) a._lang = detectLang(a.title+' '+(a.desc||''), COUNTRIES[a.country]?.lang || 'fr'); return a._lang; }
 function isForeign(a){ return langOf(a)!=='fr'; }
 function trMini(a){ return isForeign(a) ? `<button class="trmini" data-trt="${esc(a.title)}" data-lang="${langOf(a)}">FR</button>` : ''; }
+/* Journaux prioritaires / masqués */
+function srcKey(name){ return (name||'').toLowerCase().replace(/\s+via msn$/,'').trim(); }
+function prioOf(name){ return (S.prio||{})[srcKey(name)] || ''; }
+function applyPrio(list){ const v=list.filter(a=>prioOf(a.source)!=='h'); return [...v.filter(a=>prioOf(a.source)==='p'), ...v.filter(a=>prioOf(a.source)!=='p')]; }
 function hash(s){ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))|0; return (h>>>0).toString(36); }
 function visibleCountries(){ const v=(S.visible||S.countries).filter(c=>S.countries.includes(c)); return v.length?v:S.countries; }
 
@@ -319,6 +344,7 @@ async function renderFeed(force){
     for(let k=0; byC.some(l=>l.length); k++) byC.forEach(l=>{ if(l.length) mixed.push(l.shift()); });
     items = mixed;
   }
+  items = applyPrio(items);
   if(!items.length){
     feed.innerHTML = tab!=='journaux' && !st
       ? `<div class="status">Les flux Google ne sont pas encore générés sur le site (GitHub Action).<br>Réessaie dans quelques minutes.</div>`
@@ -333,7 +359,7 @@ async function renderFeed(force){
 function card(a, lead){
   const c = COUNTRIES[a.country]; const saved = S.saved.some(s=>s.id===a.id);
   return `<article class="card ${lead?'lead':''}" data-id="${a.id}">
-    <div class="meta"><span>${c?c.flag:''}</span>${logo(a)}<span class="src">${esc(a.source)}</span><span>· ${ago(a.date)}</span></div>
+    <div class="meta"><span>${c?c.flag:''}</span>${logo(a)}<button class="src ${prioOf(a.source)==='p'?'p':''}" data-act="srcmenu" title="Priorité de ce journal">${prioOf(a.source)==='p'?'★ ':''}${esc(a.source)} ▾</button><span>· ${ago(a.date)}</span></div>
     <div class="row"><div style="flex:1;min-width:0">
       <a class="title" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.title)}</a>
       ${a.desc?`<div class="desc">${esc(a.desc)}</div>`:''}
@@ -366,21 +392,31 @@ function renderCompareHome(){
 }
 
 /* ====== Comparaison ====== */
-async function translate(text, from, to){
-  if(from===to) return text;
-  const k='tr.'+from+'.'+to+'.'+hash(text); const c=cacheGet(k); if(c) return c.v;
+const same = (a,b) => (a||'').toLowerCase().replace(/[^\p{L}\p{N}]/gu,'') === (b||'').toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
+async function mmCall(text, from, to){
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0,480))}&langpair=${from}|${to}`;
   for(const u of [url, proxied(url)]){
     try{
       const j = JSON.parse(await getText(u));
       const v = j?.responseData?.translatedText;
-      if(!v || /MYMEMORY WARNING|INVALID/i.test(v)) continue;
-      const clean = new DOMParser().parseFromString(v,'text/html').body.textContent;
-      cacheSet(k,{v:clean}); return clean;
+      if(!v || /MYMEMORY WARNING|INVALID|PLEASE SELECT/i.test(v)) continue;
+      return new DOMParser().parseFromString(v,'text/html').body.textContent;
     }catch(e){}
   }
   return null;
 }
+/* Renvoie la traduction, null si le service échoue, '' si la langue n'est pas reconnue */
+async function translate(text, from, to){
+  from = detectLang(text, from);
+  if(from===to) return text;
+  const k='tr2.'+from+'.'+to+'.'+hash(text); const c=cacheGet(k); if(c) return c.v;
+  let v = await mmCall(text, from, to);
+  if(v===null) return null;
+  if(same(v,text)){ const v2 = await mmCall(text, 'Autodetect', to); v = v2 && !same(v2,text) ? v2 : ''; }
+  if(v) cacheSet(k,{v});
+  return v;
+}
+const TR_FAIL = r => r==='' ? 'Langue non reconnue par le traducteur.' : 'Traduction indisponible (quota du jour atteint ?)';
 function keywords(text, lang, max=5){
   const stop = new Set((STOP[lang]||'').split(' '));
   const words = text.replace(/[«»"“”’'(),.:;!?¿¡–—\-]/g,' ').split(/\s+/).filter(w=>w.length>2 && !stop.has(w.toLowerCase()));
@@ -425,6 +461,7 @@ async function runCol(c){
     if(!items.length && q.split(' ').length>3){ q=q.split(' ').slice(0,3).join(' '); items = await loadFeed('s.'+c+'.'+hash(q), searchUrl(c,q), c, '', false); }
     items = [...items].sort((a,b)=>b.date-a.date);
   }catch(e){ res.innerHTML=`<div class="status">Échec du chargement.</div>`; return; }
+  items = applyPrio(items);
   res.innerHTML = items.length ? items.slice(0,15).map(a=>`<div class="item"><div class="irow"><div style="flex:1;min-width:0"><a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.title)}</a><small>${logo(a)}${esc(a.source)} · ${ago(a.date)}${trMini(a)}</small></div>${a.img?`<img class="thumb" src="${esc(a.img)}" loading="lazy" alt="" onerror="this.remove()">`:''}</div></div>`).join('')
     : `<div class="status">Rien trouvé. Simplifie les mots-clés ci-dessus.</div>`;
 }
@@ -462,6 +499,12 @@ function openSettings(first){
       </div>`;
     // sugg kept in closure for click handler
   }
+  function prioBlock(){
+    const e = Object.entries(draft.prio||{});
+    const row = ([k,v]) => `<div class="jrow"><span>${v==='p'?'★':'🚫'}</span><div class="n"><b>${esc((S.prioNames||{})[k]||k)}</b><small>${v==='p'?'Prioritaire':'Masqué'}</small></div><button class="iconbtn" data-pdel="${esc(k)}">✕</button></div>`;
+    return `<h3>Priorité des journaux</h3><div class="hint">Touche le nom d’un journal sur une carte pour le mettre en priorité ou le masquer. ✕ = retour à la normale.</div>
+      ${e.length ? e.sort((a,b)=>a[1].localeCompare(b[1])).map(row).join('') : '<div class="hint">Aucun journal prioritaire ni masqué.</div>'}`;
+  }
   function advancedBlock(){
     return `<h3>Relais (proxy)</h3><div class="hint">Sert aux journaux et au mode comparaison. Vide = relais par défaut (kiosque-relais).</div>
       <input id="proxy" value="${esc(draft.proxy)}" placeholder="${DEFAULT_PROXY}">
@@ -473,7 +516,7 @@ function openSettings(first){
     let html='';
     if(step===1){ $('#settingsTitle').textContent='Bienvenue — 1/2'; html = countriesBlock() + `<button class="btn" id="next" ${draft.countries.length?'':'disabled style="opacity:.5"'}>Suivant</button>`; }
     else if(step===2){ $('#settingsTitle').textContent='Bienvenue — 2/2'; html = themesBlock() + `<button class="btn" id="done">C’est parti</button><div class="hint" style="text-align:center;margin-top:10px">Tu pourras ajouter tes journaux dans ⚙ Réglages.</div>`; }
-    else { $('#settingsTitle').textContent='Réglages'; html = countriesBlock()+themesBlock()+journalsBlock()+advancedBlock()+`<button class="btn" id="done">Enregistrer</button>`; }
+    else { $('#settingsTitle').textContent='Réglages'; html = countriesBlock()+themesBlock()+journalsBlock()+prioBlock()+advancedBlock()+`<button class="btn" id="done">Enregistrer</button>`; }
     body.innerHTML = html;
     const sugg = draft.countries.flatMap(c=>(PRESETS[c]||[]).map(([n,u])=>({n,u,c}))).filter(p=>!draft.journals.some(j=>j.url===p.u));
     body.onclick = e=>{
@@ -484,6 +527,7 @@ function openSettings(first){
       else if(b.dataset.pt){ const k=b.dataset.pt, i=draft.themes.indexOf(k);
         if(i>=0){ if(draft.themes.length>1) draft.themes.splice(i,1); } else draft.themes.push(k); draw(); }
       else if(b.dataset.th){ draft.theme=b.dataset.th; draw(); }
+      else if(b.dataset.pdel){ draft.prio = {...(draft.prio||{})}; delete draft.prio[b.dataset.pdel]; draw(); }
       else if(b.dataset.jdel){ draft.journals.splice(+b.dataset.jdel,1); draw(); }
       else if(b.dataset.padd){ const p=sugg[+b.dataset.padd]; draft.journals.push({id:hash(p.u),name:p.n,url:p.u,country:p.c,theme:'journaux'}); draw(); }
       else if(b.id==='jAdd'){ const n=$('#jName').value.trim(), u=$('#jUrl').value.trim();
@@ -502,7 +546,7 @@ function openSettings(first){
         if(!draft.countries.length) return toast('Choisis au moins un pays');
         if($('#proxy')) draft.proxy = $('#proxy').value.trim();
         draft.journals = draft.journals.filter(j=>draft.countries.includes(j.country));
-        Object.assign(S, {countries:draft.countries, themes:draft.themes, journals:draft.journals, proxy:draft.proxy, theme:draft.theme, visible:null});
+        Object.assign(S, {countries:draft.countries, themes:draft.themes, journals:draft.journals, prio:draft.prio||{}, proxy:draft.proxy, theme:draft.theme, visible:null});
         save(); applyTheme(); closeSettings(); renderHeader(); renderFeed();
       }
     };
@@ -538,13 +582,28 @@ $('#feed').onclick = e=>{
     if(i>=0){ S.saved.splice(i,1); toast('Retiré'); } else { S.saved.unshift(a); S.saved=S.saved.slice(0,100); toast('Gardé pour plus tard'); }
     save(); if(S.tab==='saved') renderSaved(); else b.textContent = i>=0?'☆ À lire':'★ Gardé';
   }
+  else if(b.dataset.act==='srcmenu'){
+    const ex = cardEl.querySelector('.srcmenu'); if(ex){ ex.remove(); return; }
+    const cur = prioOf(a.source);
+    cardEl.querySelector('.meta').insertAdjacentHTML('afterend', `<div class="srcmenu">
+      <button class="act ${cur==='p'?'on':''}" data-act="setprio" data-v="p">★ Prioritaire</button>
+      <button class="act ${!cur?'on':''}" data-act="setprio" data-v="">Normal</button>
+      <button class="act ${cur==='h'?'on':''}" data-act="setprio" data-v="h">Masquer</button></div>`);
+  }
+  else if(b.dataset.act==='setprio'){
+    const k = srcKey(a.source); S.prio = S.prio||{};
+    S.prioNames = S.prioNames||{}; S.prioNames[k] = a.source.replace(/\s+via MSN$/i,'');
+    if(b.dataset.v) S.prio[k]=b.dataset.v; else delete S.prio[k];
+    save(); toast(b.dataset.v==='p' ? `${a.source} : prioritaire` : b.dataset.v==='h' ? `${a.source} masqué (réversible dans Réglages)` : `${a.source} : normal`);
+    if(S.tab==='saved') renderSaved(); else renderFeed();
+  }
   else if(b.dataset.act==='tr'){
     const slot = cardEl.querySelector('.trslot');
     if(slot.innerHTML){ slot.innerHTML=''; b.classList.remove('hot'); return; }
     b.classList.add('hot'); slot.innerHTML = `<div class="trtxt">Traduction…</div>`;
     const lang = langOf(a);
     Promise.all([translate(a.title, lang, 'fr'), a.desc ? translate(a.desc, lang, 'fr') : null]).then(([t,d])=>{
-      slot.innerHTML = t ? `<div class="trtxt">${esc(t)}${d?`<div class="d">${esc(d)}</div>`:''}</div>` : `<div class="trtxt">Traduction indisponible (quota du jour atteint ?)</div>`;
+      slot.innerHTML = t ? `<div class="trtxt">${esc(t)}${d?`<div class="d">${esc(d)}</div>`:''}</div>` : `<div class="trtxt">${TR_FAIL(t)}</div>`;
     });
   }
   else if(b.dataset.act==='others'){
@@ -562,7 +621,7 @@ document.addEventListener('click', e=>{
   if(ex){ ex.remove(); return; }
   const box = document.createElement('div'); box.className='trtxt'; box.textContent='Traduction…';
   m.closest('small').after(box);
-  translate(m.dataset.trt, m.dataset.lang, 'fr').then(t=>{ box.textContent = t || 'Traduction indisponible (quota du jour atteint ?)'; });
+  translate(m.dataset.trt, m.dataset.lang, 'fr').then(t=>{ box.textContent = t || TR_FAIL(t); });
 }, true);
 $('#feed').addEventListener('submit', e=>{
   const panel = e.target.closest('.others'); if(!panel) return;
@@ -581,7 +640,7 @@ async function runOthers(a, panel, q){
   }catch(e){}
   const google = (a.related||[]).map(r=>({...r, country:a.country}));
   const seen = new Set([norm(a.source)]), out = [];
-  for(const it of [...google, ...[...bing].sort((x,y)=>y.date-x.date)]){
+  for(const it of applyPrio([...google, ...[...bing].sort((x,y)=>y.date-x.date)])){
     const k = norm(it.source); if(!k || seen.has(k) || it.link===a.link) continue;
     seen.add(k); out.push(it); if(out.length>=10) break;
   }
