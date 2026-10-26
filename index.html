@@ -73,6 +73,14 @@ main{max-width:760px;margin:0 auto;padding:12px 16px 90px;min-height:70vh}
 .others .item:last-child{border:0}
 .others .item a{text-decoration:none;font-family:Georgia,serif;font-weight:600;line-height:1.3;display:block;font-size:15px}
 .others .item small{color:var(--ink3);display:flex;align-items:center;gap:5px;margin-top:3px}
+.finder{margin:12px 0 6px;padding:10px;border-radius:12px;background:var(--surface2)}
+.finder .q{display:flex;gap:6px}
+.finder .q input{padding:9px 10px}
+.finder .fres{margin-top:8px}
+.finder .frow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.finder .frow:last-child{border:0}
+.finder .frow .n{flex:1;min-width:0}
+.finder .frow small{display:block;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trtxt{font-style:italic;color:var(--ink2);font-size:15px;line-height:1.35;margin-top:6px;padding-left:10px;border-left:3px solid var(--accent)}
 .trtxt .d{font-size:13.5px;margin-top:4px;color:var(--ink3)}
 .trmini{font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--chip);color:var(--ink2);margin-left:4px}
@@ -505,6 +513,60 @@ function openSettings(first){
   const draft = JSON.parse(JSON.stringify(S));
   let step = first ? 1 : 0;
   const body = $('#settingsBody');
+  const finder = {q:'', status:'', domains:[], feeds:[], noFeed:''};
+  function finderHtml(){
+    let h = finder.status ? `<div class="hint">${esc(finder.status)}</div>` : '';
+    if(finder.domains.length) h += finder.domains.map((d,i)=>`<div class="frow"><img class="logo" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(d.host)}&sz=64" alt="" onerror="this.remove()"><div class="n"><b>${esc(d.name||d.host)}</b><small>${esc(d.host)}</small></div><button class="act" data-fdom="${i}">Choisir</button></div>`).join('');
+    if(finder.feeds.length) h += finder.feeds.map((f,i)=>`<div class="frow"><div class="n"><b>${esc(f.title)}</b><small>${esc(f.url)}</small><small>${f.count} articles${f.last?' · dernier il y a '+ago(f.last):''}</small></div><button class="act hot" data-fadd="${i}">+ Ajouter</button></div>`).join('');
+    if(finder.noFeed) h += `<div class="frow"><div class="n"><b>Aucun flux RSS trouvé</b><small>${esc(finder.noFeed)}</small></div><button class="act" data-fregion="1">+ Régional (Bing)</button></div>`;
+    return h;
+  }
+  function finderUpdate(){ const o=$('#fOut'); if(o) o.innerHTML = finderHtml(); }
+  const FEED_PATHS = ['/rss','/feed','/rss.xml','/feed.xml','/index.rss','/rss/portada','/rss/home.xml','/rss/index.xml','/feeds/rss','/arc/outboundfeeds/rss/','/rss/section/1','/?feed=rss2'];
+  async function testFeed(url){
+    try{
+      const txt = await getText(proxied(url));
+      if(!/<(rss|feed|rdf:RDF)[\s>]/i.test(txt.slice(0,3000))) return null;
+      const doc = new DOMParser().parseFromString(txt,'text/xml');
+      const title = (doc.querySelector('channel > title, feed > title')?.textContent||'').trim();
+      const items = parseFeed(txt, 'FR', '');
+      if(!items.length) return null;
+      return {url, title: title || new URL(url).hostname, count: items.length, last: Math.max(...items.map(i=>i.date||0))};
+    }catch(e){ return null; }
+  }
+  async function discover(input){
+    let page = input.trim(); if(!/^https?:\/\//i.test(page)) page = 'https://' + page;
+    let origin; try{ origin = new URL(page).origin; }catch(e){ finder.status='Adresse invalide.'; return finderUpdate(); }
+    finder.domains=[]; finder.feeds=[]; finder.noFeed=''; finder.status='Analyse de la page…'; finderUpdate();
+    const cands = new Set();
+    for(const u of [...new Set([page, origin+'/'])]){
+      try{
+        const html = await getText(proxied(u));
+        if(/<(rss|feed)[\s>]/i.test(html.slice(0,3000))){ cands.add(u); continue; }   // c'était déjà un flux
+        const d = new DOMParser().parseFromString(html,'text/html');
+        d.querySelectorAll('link[rel~="alternate"]').forEach(l=>{ if(/rss|atom|xml/i.test(l.type||'')) try{ cands.add(new URL(l.getAttribute('href'), u).href); }catch(e){} });
+        d.querySelectorAll('a[href]').forEach(a=>{ const h=a.getAttribute('href'); if(/(\brss\b|\/feed\b|\.rss\b|\.xml\b)/i.test(h) && cands.size<25) try{ cands.add(new URL(h, u).href); }catch(e){} });
+      }catch(e){}
+    }
+    finder.status = cands.size ? `Test de ${cands.size} flux possibles…` : 'Essai des adresses habituelles…'; finderUpdate();
+    let found = (await Promise.all([...cands].slice(0,20).map(testFeed))).filter(Boolean);
+    if(!found.length){ found = (await Promise.all(FEED_PATHS.map(p=>testFeed(origin+p)))).filter(Boolean); }
+    const seenU = new Set(); found = found.filter(f=>!seenU.has(f.url) && seenU.add(f.url)).sort((a,b)=>b.last-a.last);
+    finder.feeds = found;
+    finder.status = found.length ? `${found.length} flux trouvé(s) — le plus récent en premier :` : '';
+    finder.noFeed = found.length ? '' : new URL(origin).hostname.replace(/^www\./,'');
+    finderUpdate();
+  }
+  async function findByName(name){
+    finder.domains=[]; finder.feeds=[]; finder.noFeed=''; finder.status='Recherche du site…'; finderUpdate();
+    const c = $('#jCountry')?.value || draft.countries[0] || 'FR';
+    let items=[]; try{ items = parseFeed(await getText(proxied(searchUrl(c, name))), c, ''); }catch(e){}
+    const by = {};
+    items.forEach(i=>{ try{ const h=new URL(i.link).hostname.replace(/^www\./,''); if(/msn\.com|bing\.com|yahoo\./.test(h)) return; (by[h] = by[h] || {host:h, name:i.source, n:0}).n++; }catch(e){} });
+    finder.domains = Object.values(by).sort((a,b)=>b.n-a.n).slice(0,6);
+    finder.status = finder.domains.length ? 'Sites trouvés — choisis le bon :' : 'Aucun site trouvé. Essaie avec l’adresse du site.';
+    finderUpdate();
+  }
   $('#settingsClose').style.visibility = first ? 'hidden':'visible';
   function countriesBlock(){
     return `<h3>Pays de la presse</h3><div class="hint">Choisis de 1 à 3 pays (${draft.countries.length}/3).</div>
@@ -521,6 +583,12 @@ function openSettings(first){
       ${draft.journals.map((j,i)=>`<div class="jrow"><span>${COUNTRIES[j.country]?.flag||''}</span><div class="n"><b>${esc(j.name)}</b><small>${esc(j.url)}</small></div>
         <select data-jt="${i}" style="width:auto;max-width:42%;padding:6px">${themeOpts(j.theme)}</select><button class="iconbtn" data-jdel="${i}">✕</button></div>`).join('') || '<div class="hint">Aucun journal ajouté.</div>'}
       ${sugg.length?`<div class="hint" style="margin-top:12px">Suggestions :</div><div style="display:flex;flex-wrap:wrap;gap:6px">${sugg.map((p,i)=>`<button class="act" data-padd="${i}">+ ${COUNTRIES[p.c].flag} ${esc(p.n)}</button>`).join('')}</div>`:''}
+      <div class="finder"><b>Trouver le flux d’un journal</b>
+        <div class="hint" style="margin:2px 0 8px">Tape son site (heraldo.es), colle une de ses pages, ou écris son nom.</div>
+        <form class="q" id="fForm"><input id="fQuery" placeholder="heraldo.es, lien d’article ou nom" autocomplete="off" value="${esc(finder.q)}"><button class="act hot" id="fGo">Chercher</button></form>
+        <div class="fres" id="fOut">${finderHtml()}</div>
+      </div>
+      <div class="hint" style="margin-top:10px">Ajout manuel (pays et onglet ci-dessous servent aussi aux flux trouvés) :</div>
       <div class="form2">
         <input class="full" id="jName" placeholder="Nom du journal">
         <input class="full" id="jUrl" placeholder="Adresse du flux RSS (https://…)">
@@ -568,6 +636,7 @@ function openSettings(first){
     else { $('#settingsTitle').textContent='Réglages'; html = countriesBlock()+themesBlock()+orderBlock()+journalsBlock()+regionalBlock()+prioBlock()+advancedBlock()+`<button class="btn" id="done">Enregistrer</button>`; }
     body.innerHTML = html;
     const sugg = draft.countries.flatMap(c=>(PRESETS[c]||[]).map(([n,u])=>({n,u,c}))).filter(p=>!draft.journals.some(j=>j.url===p.u));
+    body.onsubmit = e=>e.preventDefault();
     body.onclick = e=>{
       const b = e.target.closest('button'); if(!b) return;
       if(b.dataset.pc){ const k=b.dataset.pc, i=draft.countries.indexOf(k);
@@ -590,6 +659,18 @@ function openSettings(first){
       else if(b.dataset.pdel){ draft.prio = {...(draft.prio||{})}; delete draft.prio[b.dataset.pdel]; draw(); }
       else if(b.dataset.jdel){ draft.journals.splice(+b.dataset.jdel,1); draw(); }
       else if(b.dataset.padd){ const p=sugg[+b.dataset.padd]; draft.journals.push({id:hash(p.u),name:p.n,url:p.u,country:p.c,theme:'journaux'}); draw(); }
+      else if(b.id==='fGo'){ e.preventDefault(); const q=$('#fQuery').value.trim(); finder.q=q; if(!q) return;
+        if(/^\S+\.\S{2,}/.test(q) && !/\s/.test(q)) discover(q); else findByName(q); }
+      else if(b.dataset.fdom){ const d=finder.domains[+b.dataset.fdom]; finder.q=d.host; $('#fQuery').value=d.host; finder.pickName=d.name; discover(d.host); }
+      else if(b.dataset.fadd){ const f=finder.feeds[+b.dataset.fadd];
+        if(draft.journals.some(j=>j.url===f.url)) return toast('Déjà dans tes journaux');
+        const name = finder.pickName || f.title.split(/\s[-|–:·]\s/)[0].trim() || f.title;
+        draft.journals.push({id:hash(f.url), name, url:f.url, country:$('#jCountry').value, theme:$('#jTheme').value});
+        finder.feeds=[]; finder.status=`${name} ajouté.`; finder.pickName=''; draw(); toast(`${name} ajouté — pense à Enregistrer`); }
+      else if(b.dataset.fregion){ const st=finder.noFeed;
+        draft.regionals = draft.regionals||[]; if(draft.regionals.some(r=>r.site===st)) return toast('Déjà en presse régionale');
+        draft.regionals.push({id:hash(st), name:finder.pickName||st, site:st, country:$('#jCountry').value});
+        finder.noFeed=''; finder.status=`${st} ajouté à la presse régionale.`; draw(); }
       else if(b.id==='jAdd'){ const n=$('#jName').value.trim(), u=$('#jUrl').value.trim();
         if(!n||!/^https?:\/\//.test(u)) return toast('Nom et adresse https requis');
         draft.journals.push({id:hash(u),name:n,url:u,country:$('#jCountry').value,theme:$('#jTheme').value}); draw(); }
