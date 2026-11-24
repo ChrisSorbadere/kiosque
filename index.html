@@ -208,7 +208,7 @@ const STOP = {
 
 /* ====== État ====== */
 const KEY = 'kiosque.v1';
-const defaults = {countries:[], themes:['une','WORLD','NATION','BUSINESS','TECHNOLOGY','SCIENCE'], journals:[], tabOrder:null, regionals:null, regInit:false, prio:{}, prioNames:{}, proxy:'', saved:[], follows:[], visible:null, tab:'une', theme:'auto'};
+const defaults = {countries:[], themes:['une','WORLD','NATION','BUSINESS','TECHNOLOGY','SCIENCE'], journals:[], tabOrder:null, regionals:null, regInit:false, prio:{}, prioNames:{}, proxy:'', saved:[], follows:[], visible:null, tab:'une', theme:'auto', browser:'default'};
 const REGIONAL_PRESETS = [
   {id:'heraldo', name:'Heraldo de Aragón', site:'heraldo.es', country:'ES'},
   {id:'pdaragon', name:'El Periódico de Aragón', site:'elperiodicodearagon.com', country:'ES'},
@@ -627,6 +627,8 @@ function openSettings(first){
       <input id="proxy" value="${esc(draft.proxy)}" placeholder="${DEFAULT_PROXY}">
       <button class="btn ghost" id="testProxy">Tester le relais</button><div class="hint" id="testOut"></div>
       <h3>Apparence</h3><div class="grid">${[['auto','Auto'],['light','Clair'],['dark','Sombre']].map(([k,n])=>`<button class="pick ${draft.theme===k?'on':''}" data-th="${k}">${n}</button>`).join('')}</div>
+      <h3>Ouvrir les articles dans</h3><div class="grid">${[['default','Navigateur par défaut'],['brave','Brave']].map(([k,n])=>`<button class="pick ${draft.browser===k?'on':''}" data-br="${k}">${n}</button>`).join('')}</div>
+      <div class="hint">Brave : sur Android uniquement ; si Brave n’est pas installé, l’article s’ouvre dans le navigateur habituel.</div>
       <button class="btn ghost" id="clearCache">Vider le cache des articles</button>`;
   }
   function draw(){
@@ -644,6 +646,7 @@ function openSettings(first){
         draw(); }
       else if(b.dataset.pt){ const k=b.dataset.pt, i=draft.themes.indexOf(k);
         if(i>=0){ if(draft.themes.length>1) draft.themes.splice(i,1); } else draft.themes.push(k); draw(); }
+      else if(b.dataset.br){ draft.browser=b.dataset.br; draw(); }
       else if(b.dataset.th){ draft.theme=b.dataset.th; draw(); }
       else if(b.dataset.mv){
         const keys = tabList(draft).map(t=>t[0]), i = keys.indexOf(b.dataset.mv), j = i + (+b.dataset.d);
@@ -687,7 +690,7 @@ function openSettings(first){
         if(!draft.countries.length) return toast('Choisis au moins un pays');
         if($('#proxy')) draft.proxy = $('#proxy').value.trim();
         draft.journals = draft.journals.filter(j=>draft.countries.includes(j.country));
-        Object.assign(S, {countries:draft.countries, themes:draft.themes, journals:draft.journals, tabOrder:draft.tabOrder||null, regionals:draft.regionals||[], prio:draft.prio||{}, proxy:draft.proxy, theme:draft.theme, visible:null});
+        Object.assign(S, {countries:draft.countries, themes:draft.themes, journals:draft.journals, tabOrder:draft.tabOrder||null, regionals:draft.regionals||[], prio:draft.prio||{}, proxy:draft.proxy, theme:draft.theme, browser:draft.browser||'default', visible:null});
         save(); applyTheme(); closeSettings(); renderHeader(); renderFeed();
       }
     };
@@ -810,6 +813,16 @@ feedEl.addEventListener('touchend', e=>{
     const n = tabs[i + (dx<0?1:-1)]; if(n) setTab(n);
   }
 }, {passive:true});
+
+/* Ouverture des articles dans Brave (Android) via un lien « intent » */
+document.addEventListener('click', e=>{
+  if(S.browser!=='brave' || !/Android/i.test(navigator.userAgent)) return;
+  const a = e.target.closest('a[href]'); if(!a) return;
+  let u; try{ u = new URL(a.href); }catch(err){ return; }
+  if(!/^https?:$/.test(u.protocol) || u.origin===location.origin) return;
+  e.preventDefault();
+  location.href = `intent://${u.host}${u.pathname}${u.search}${u.hash}#Intent;scheme=${u.protocol.slice(0,-1)};package=com.brave.browser;S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
+}, true);
 
 /* ====== Démarrage ====== */
 applyTheme();
